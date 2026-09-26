@@ -2,6 +2,7 @@
 
 #include "ofMain.h"
 #include "ofxLatk.h"
+#include "LatkInkRenderer.h"
 
 class ofApp : public ofBaseApp {
 
@@ -24,5 +25,11 @@ class ofApp : public ofBaseApp {
 
 		Latk latk;
 		ofEasyCam cam;
+		LatkInkRenderer ink;
+
+		// Input rates to cycle through with s: the faster, the smoother.
+		vector<float> inputRates = { 90, 180, 360 };
+		size_t inputRateIndex = 0;
+		bool drawInk = true; // false draws Latk's original GL lines
 
 };
