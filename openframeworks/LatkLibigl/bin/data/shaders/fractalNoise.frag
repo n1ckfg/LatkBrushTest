@@ -29,14 +29,15 @@ float noise(vec3 x) {
 	               mix(hash(i + vec3(0.0, 1.0, 1.0)), hash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
 }
 
-// Octaves finer than about two pixels are faded to their average and then
-// skipped, so thin, distant strokes don't shimmer or cost full price.
+// Octaves are faded to their average as their cells shrink from eight pixels
+// to four, then skipped, so thin, distant strokes don't shimmer or cost full
+// price. Close up, all octaves show.
 float fbm(vec3 p) {
 	float footprint = length(fwidth(p));
 	float sum = 0.0;
 	float amplitude = 0.5;
 	for (int i = 0; i < OCTAVES; i++) {
-		float fade = 1.0 - smoothstep(0.25, 0.5, footprint);
+		float fade = 1.0 - smoothstep(0.125, 0.25, footprint);
 		if (fade <= 0.0) {
 			// The remaining octaves' amplitudes add up to 2 * amplitude.
 			sum += amplitude;

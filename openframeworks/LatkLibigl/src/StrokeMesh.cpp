@@ -34,53 +34,63 @@ double angleBetween(const Vec3 & a, const Vec3 & b) {
 // Fits a smooth spline to the points and samples it, with more stations where
 // it bends and fewer where it runs straight.
 vector<Station> sampleSpine(const Eigen::MatrixXd & points, const StrokeMeshSettings & settings) {
-	vector<Station> spine;
-	if (points.rows() == 1) {
-		spine.push_back({points.row(0).transpose(), Vec3::UnitZ()});
-		return spine;
-	}
+	if (points.rows() == 1) return {{points.row(0).transpose(), Vec3::UnitZ()}};
 
 	const double tolerance = settings.fitTolerance * settings.radius;
 	vector<Eigen::MatrixXd> cubics;
 	igl::fit_cubic_bezier(points, tolerance * tolerance, cubics);
+	if (cubics.empty()) return {{points.row(0).transpose(), Vec3::UnitZ()}};
 
+	// Evaluate the spline finely first.
 	const double maxLength = settings.maxSegmentLength * settings.radius;
-	const double maxAngle = ofDegToRad(settings.maxSegmentAngle);
+	vector<Station> fine;
 	for (size_t c = 0; c < cubics.size(); c++) {
 		const Eigen::MatrixXd & controls = cubics[c];
 		// The derivative of a cubic Bezier is a quadratic Bezier (the hodograph).
 		Eigen::MatrixXd hodograph(3, 3);
 		for (int i = 0; i < 3; i++) hodograph.row(i) = 3.0 * (controls.row(i + 1) - controls.row(i));
 
-		// Arc length is close to the mean of the chord and the control polygon.
+		// The control polygon is at least as long as the curve.
 		double polygon = 0;
 		for (int i = 0; i < 3; i++) polygon += (controls.row(i + 1) - controls.row(i)).norm();
-		const double length = 0.5 * (polygon + (controls.row(3) - controls.row(0)).norm());
-		// The tangent turns no further than the hodograph's control polygon.
-		const double turn = angleBetween(hodograph.row(0).transpose(), hodograph.row(1).transpose())
-			+ angleBetween(hodograph.row(1).transpose(), hodograph.row(2).transpose());
-		const int segments = std::max({1, (int)std::ceil(length / maxLength), (int)std::ceil(turn / maxAngle)});
+		const int samples = std::max(16, 2 * (int)std::ceil(polygon / maxLength));
 
 		// Each cubic starts where the last one ended, so skip its first sample.
 		const int first = c == 0 ? 0 : 1;
-		const Eigen::VectorXd t = Eigen::VectorXd::LinSpaced(segments + 1, 0, 1).tail(segments + 1 - first);
+		const Eigen::VectorXd t = Eigen::VectorXd::LinSpaced(samples + 1, 0, 1).tail(samples + 1 - first);
 		Eigen::MatrixXd positions, derivatives;
 		igl::bezier(controls, t, positions);
 		igl::bezier(hodograph, t, derivatives);
 		for (int i = 0; i < t.size(); i++) {
-			spine.push_back({positions.row(i).transpose(), derivatives.row(i).transpose()});
+			fine.push_back({positions.row(i).transpose(), derivatives.row(i).transpose()});
 		}
 	}
 
 	// The derivative can vanish where a control point sits on an end point;
-	// estimate those tangents from the neighbouring stations instead.
+	// estimate those tangents from the neighbouring samples instead.
 	const double minSpeed = 1e-9 * settings.radius;
-	for (size_t i = 0; i < spine.size(); i++) {
-		Vec3 & tangent = spine[i].tangent;
+	for (size_t i = 0; i < fine.size(); i++) {
+		Vec3 & tangent = fine[i].tangent;
 		if (tangent.norm() <= minSpeed) {
-			tangent = spine[std::min(i + 1, spine.size() - 1)].position - spine[i > 0 ? i - 1 : 0].position;
+			tangent = fine[std::min(i + 1, fine.size() - 1)].position - fine[i > 0 ? i - 1 : 0].position;
 		}
 		tangent = tangent.norm() > minSpeed ? tangent.normalized() : Vec3::UnitZ();
+	}
+
+	// Then keep a sample only once the curve has bent or run far enough since
+	// the last one kept.
+	const double maxAngle = ofDegToRad(settings.maxSegmentAngle);
+	vector<Station> spine = {fine.front()};
+	double turn = 0;
+	double length = 0;
+	for (size_t i = 1; i < fine.size(); i++) {
+		turn += angleBetween(fine[i - 1].tangent, fine[i].tangent);
+		length += (fine[i].position - fine[i - 1].position).norm();
+		if (turn >= maxAngle || length >= maxLength || i + 1 == fine.size()) {
+			spine.push_back(fine[i]);
+			turn = 0;
+			length = 0;
+		}
 	}
 	return spine;
 }

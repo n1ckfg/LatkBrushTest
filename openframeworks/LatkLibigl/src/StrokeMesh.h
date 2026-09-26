@@ -8,7 +8,7 @@ struct StrokeMeshSettings {
 	float radius = 0.2;
 	int sides = 8; // vertices around the tube
 	int capRings = 3; // rings in each rounded end, counting the tip
-	float fitTolerance = 0.25; // how far the smoothed curve may stray from the input, x radius
+	float fitTolerance = 0.5; // how far the smoothed curve may stray from the input, x radius
 	float maxSegmentLength = 4.0; // longest straight run between rings, x radius
 	float maxSegmentAngle = 15.0; // sharpest bend between rings, in degrees
 	float endRadius = 0.35; // radius at the tips, as a fraction of radius
