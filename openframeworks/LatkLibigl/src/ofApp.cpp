@@ -78,7 +78,11 @@ void ofApp::draw() {
 		glDisable(GL_CULL_FACE);
 		ofDisableDepthTest();
 	} else {
+		// LatkStroke::draw() calls ofNoFill(), which sets glPolygonMode(GL_LINE)
+		// and would leave the tubes in wireframe. Restore the style afterwards.
+		ofPushStyle();
 		for (auto & layer : latk.layers) layer.run();
+		ofPopStyle();
 	}
 	cam.end();
 
