@@ -16,6 +16,9 @@ struct LatkInkSettings {
 	// 1 at taperLength in, in the stroke's own units (before globalScale).
 	float endPressure = 0.35;
 	float taperLength = 2.0;
+	// The modeler outputs at least 180 points a second, often less than a
+	// pixel apart on screen. The ribbons skip points closer than this, in pixels.
+	float minSpacing = 1;
 
 	bool operator==(const LatkInkSettings & other) const;
 	bool operator!=(const LatkInkSettings & other) const;
@@ -28,11 +31,12 @@ struct LatkInkSettings {
 // The modeler's parameters are tuned for pixels, so modeling happens in
 // screen space. update() remodels whenever the camera, the viewport, the
 // settings or a layer's current frame changes, and otherwise keeps the last
-// result on the GPU.
+// result on the GPU. Strokes are modeled on all cores.
 class LatkInkRenderer {
 
 	public:
-		void setup();
+		// numThreads 0 uses one per core.
+		void setup(size_t numThreads = 0);
 		// Remodels if anything changed since the last call. Returns true if it did.
 		bool update(const Latk & latk, const ofCamera & cam, const ofRectangle & viewport = ofGetCurrentViewport());
 		// In screen coordinates, so call it outside cam.begin() / cam.end().
@@ -50,22 +54,46 @@ class LatkInkRenderer {
 			size_t vertices = 0;
 			size_t triangles = 0;
 			float projectMs = 0; // projection, clipping and pressure
-			float modelMs = 0; // ofxInkStrokeModeler
-			float meshMs = 0; // ribbons, merged into one mesh
+			float modelMs = 0; // ofxInkStrokeModeler, summed over threads
+			float meshMs = 0; // ribbons, summed over threads
+			float buildMs = 0; // modeling and ribbons, as the threads ran them
 			float uploadMs = 0;
 			float totalMs = 0;
 		};
 		const Stats & getStats() const;
 
 	private:
-		void remodel(const Latk & latk, const glm::mat4 & modelViewProjection, const ofRectangle & viewport);
+		// A run of a stroke's points that stays in view. It's modeled as a
+		// stroke of its own.
+		struct Piece {
+			size_t first = 0; // into points and pressures
+			size_t count = 0;
+			ofFloatColor color;
+		};
 
-		ofxInkStrokeModeler modeler;
-		ofVbo vbo;
-		size_t numIndices = 0;
+		// Models a share of the pieces on a thread of its own. Its ribbons are
+		// drawn with one call, in turn, so strokes overlap as in the drawing.
+		struct Worker {
+			ofxInkStrokeModeler modeler;
+			vector<ofxInkStrokeModeler::Result> kept; // results spaced for the ribbon
+			vector<glm::vec2> vertices;
+			vector<ofFloatColor> colors;
+			vector<ofIndexType> indices;
+			ofVbo vbo;
+			size_t numIndices = 0;
+			uint64_t modelMicros = 0;
+			uint64_t meshMicros = 0;
+			size_t numResults = 0;
+		};
+
+		void project(const Latk & latk, const glm::mat4 & modelViewProjection, const ofRectangle & viewport);
+		void build(Worker & worker, size_t firstPiece, size_t endPiece);
+		void upload();
+
+		vector<Worker> workers;
 		Stats stats;
 
-		// What the current mesh was modeled from.
+		// What the current ribbons were modeled from.
 		bool modeled = false;
 		glm::mat4 modeledMatrix;
 		ofRectangle modeledViewport;
@@ -73,11 +101,11 @@ class LatkInkRenderer {
 		LatkInkSettings modeledSettings;
 
 		// Reused between remodels, to save allocations.
-		vector<glm::vec2> screenPoints;
-		vector<bool> visible;
+		vector<Piece> pieces;
+		vector<glm::vec2> points; // screen positions
 		vector<float> pressures;
-		vector<glm::vec3> vertices;
-		vector<ofFloatColor> colors;
-		vector<ofIndexType> indices;
+		vector<glm::vec2> strokePoints;
+		vector<bool> strokeVisible;
+		vector<float> strokePressures;
 
 };

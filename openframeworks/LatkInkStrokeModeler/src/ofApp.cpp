@@ -143,7 +143,9 @@ void ofApp::mouseExited(int x, int y) {
 
 //--------------------------------------------------------------
 void ofApp::windowResized(int w, int h) {
-
+	// ofEasyCam takes its mouse area from the viewport it's begun with, and
+	// it's never begun while drawing ink.
+	cam.setControlArea(ofRectangle(0, 0, w, h));
 }
 
 //--------------------------------------------------------------
