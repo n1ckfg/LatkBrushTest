@@ -90,10 +90,11 @@ bool StrokeShader::load(const string & fragmentPath) {
 	}
 
 	// Compile into a new shader, so a broken edit leaves the old one running.
+	// Before GLSL 3.30, "#line 0" means the next line is line 1.
 	ofShader next;
 	const string & vertexShader = ofIsGLProgrammableRenderer() ? vertexShaderGL3 : vertexShaderGL2;
 	if (!next.setupShaderFromSource(GL_VERTEX_SHADER, vertexShader)
-		|| !next.setupShaderFromSource(GL_FRAGMENT_SHADER, header + "#line 1\n" + stripVersion(source))
+		|| !next.setupShaderFromSource(GL_FRAGMENT_SHADER, header + "#line 0\n" + stripVersion(source))
 		|| !next.linkProgram()) {
 		ofLogError("StrokeShader") << "Keeping the previous shader; " << (fragmentPath.empty() ? "the built-in shader" : fragmentPath) << " didn't compile.";
 		return false;
@@ -109,9 +110,26 @@ bool StrokeShader::reload() {
 }
 
 //--------------------------------------------------------------
+void StrokeShader::setTexture(const string & name, const ofTexture & texture) {
+	for (auto & t : textures) {
+		if (t.first == name) {
+			t.second = texture;
+			return;
+		}
+	}
+	textures.emplace_back(name, texture);
+}
+
+//--------------------------------------------------------------
 void StrokeShader::begin() {
 	shader.begin();
 	shader.setUniform1f("time", ofGetElapsedTimef());
+	for (size_t i = 0; i < textures.size(); i++) {
+		const ofTexture & texture = textures[i].second;
+		// Unit 0 is left to openFrameworks' own drawing.
+		shader.setUniformTexture(textures[i].first, texture, i + 1);
+		shader.setUniform2f(textures[i].first + "Size", texture.getWidth(), texture.getHeight());
+	}
 }
 
 //--------------------------------------------------------------
@@ -122,4 +140,31 @@ void StrokeShader::end() {
 //--------------------------------------------------------------
 string StrokeShader::getName() const {
 	return path.empty() ? "lit" : ofFilePath::getBaseName(path);
+}
+
+//--------------------------------------------------------------
+ofTexture StrokeShader::makeNoiseTexture(int width, int bands) {
+	int height = 0;
+	for (int b = 0; b < bands; b++) height += (1 << b) + 1;
+
+	ofPixels pixels;
+	pixels.allocate(width, height, OF_PIXELS_GRAY);
+	unsigned char * data = pixels.getData();
+	// A fixed seed gives the same pattern every run.
+	std::mt19937 random(1);
+	std::uniform_int_distribution<int> value(0, 255);
+	int row = 0;
+	for (int b = 0; b < bands; b++) {
+		const int period = 1 << b;
+		for (int i = 0; i < period * width; i++) data[row * width + i] = value(random);
+		std::copy(data + row * width, data + (row + 1) * width, data + (row + period) * width);
+		row += period + 1;
+	}
+
+	// Rectangle textures can't repeat, so ask for GL_TEXTURE_2D.
+	ofTexture texture;
+	texture.allocate(pixels, false);
+	texture.setTextureWrap(GL_REPEAT, GL_CLAMP_TO_EDGE);
+	texture.setTextureMinMagFilter(GL_LINEAR, GL_LINEAR);
+	return texture;
 }

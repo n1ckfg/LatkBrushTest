@@ -10,6 +10,8 @@ varying vec3 vPosition; // eye space
 varying vec4 vColor;    // stroke colour
 
 const int OCTAVES = 5;
+const float SCALE = 0.4; // first-octave noise cells per tube radius
+const float SPEED = 0.3; // cells per second
 const float TAU = 6.2831853;
 
 // Value noise with a hash by Inigo Quilez.
@@ -55,12 +57,13 @@ void main() {
 	// Wrap uv onto a cylinder of radius 1. Around the tube that's seamless, and
 	// since uv.x is measured in circumferences, the noise isn't stretched.
 	float angle = TAU * vUv.y;
-	vec3 p = vec3(TAU * vUv.x - 0.8 * time, cos(angle), sin(angle)) * 1.2;
+	vec3 p = vec3(TAU * vUv.x, cos(angle), sin(angle)) * SCALE;
+	p.x -= SPEED * time;
 	float n = fbm(p);
 
-	vec3 dark = vColor.rgb * 0.2;
-	vec3 bright = mix(vColor.rgb, vec3(1.0), 0.3);
-	vec3 albedo = mix(dark, bright, smoothstep(0.3, 0.7, n));
+	vec3 dark = vColor.rgb * 0.3;
+	vec3 bright = mix(vColor.rgb, vec3(1.0), 0.35);
+	vec3 albedo = mix(dark, bright, smoothstep(0.25, 0.75, n));
 
 	vec3 normal = normalize(vNormal);
 	vec3 view = normalize(-vPosition);

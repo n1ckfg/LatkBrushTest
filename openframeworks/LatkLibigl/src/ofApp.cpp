@@ -50,6 +50,8 @@ void ofApp::setup() {
 		<< ofToString(strokeMeshes.getBuildSeconds(), 2) << " s: " << strokeMeshes.getNumTriangles() << " triangles, "
 		<< ofToString(strokeMeshes.getNumBytes() / 1048576.0, 1) << " MB";
 
+	// fractalNoiseTexture.frag reads its noise from this rather than hashing.
+	strokeShader.setTexture("noiseTexture", StrokeShader::makeNoiseTexture());
 	strokeShader.load(shaderPaths[shaderIndex]);
 }
 

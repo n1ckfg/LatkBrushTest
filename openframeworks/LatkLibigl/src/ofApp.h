@@ -30,7 +30,7 @@ class ofApp : public ofBaseApp {
 		StrokeShader strokeShader;
 
 		// Fragment shaders to cycle through with s; "" is the built-in lit shader.
-		vector<string> shaderPaths = { "shaders/fractalNoise.frag", "" };
+		vector<string> shaderPaths = { "shaders/fractalNoiseTexture.frag", "shaders/fractalNoise.frag", "" };
 		size_t shaderIndex = 0;
 		bool drawTubes = true; // false draws Latk's original GL lines
 
