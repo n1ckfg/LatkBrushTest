@@ -1,1 +1,4 @@
 ofxLatk
+ofxEigen
+ofxLibigl
+ofxPoco

@@ -2,6 +2,8 @@
 
 #include "ofMain.h"
 #include "ofxLatk.h"
+#include "LatkMeshCache.h"
+#include "StrokeShader.h"
 
 class ofApp : public ofBaseApp {
 
@@ -24,5 +26,12 @@ class ofApp : public ofBaseApp {
 
 		Latk latk;
 		ofEasyCam cam;
+		LatkMeshCache strokeMeshes;
+		StrokeShader strokeShader;
+
+		// Fragment shaders to cycle through with s; "" is the built-in lit shader.
+		vector<string> shaderPaths = { "shaders/fractalNoise.frag", "" };
+		size_t shaderIndex = 0;
+		bool drawTubes = true; // false draws Latk's original GL lines
 
 };
